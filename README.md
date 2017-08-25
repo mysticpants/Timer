@@ -112,10 +112,24 @@ Pause the execution of any timer.
 ### unpause()
 Unpause the execution of any timer.
 
-### onIdle()
-### wakeup()
-### cancelwakeup()
+### wakeup(\_duration, \_callback)
+Start a new timer to execute the callback after the specified duration.
+Multiple timers can be created using `wakeup()` and all use a shared timer.
+This method returns the ID of the timer created.
 
+_Note: the shared timer may reduce timer accuracy_
+
+Parameter         | Type           | Required       | Default        | Description
+----------------- | -------------- | -------------- | -------------- | ----------------
+\_duration        | float          | Yes            | N/A            | The duration of the timer in seconds
+\_callback        | function       | Yes            | N/A            | The function to run when the timer finishes
+
+### cancelwakeup(id)
+Cancels the timer with the specified ID.
+
+Parameter         | Type           | Required       | Default        | Description
+----------------- | -------------- | -------------- | -------------- | ----------------
+id                | string         | Yes            | N/A            | The ID of the timer to cancel
 
 # License
 
