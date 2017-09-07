@@ -1,6 +1,8 @@
 # Timer
 
-A simple timer class with one-off and interval timers all of which can be cancelled.
+A simple class to manage timers with one-off and interval timers all of which can be cancelled.
+Can be used to create multiple timers that actually share a single timer which may be helpful on
+the agent where the number of active timers is limited.
 
 To add this library to your model, add the following lines to
 the top of your agent code:
@@ -8,6 +10,7 @@ the top of your agent code:
 ```
 #require "Timer.class.nut:1.0.0"
 ```
+
 ## Class Usage
 
 ### constructor(\_params, \_send\_self)
@@ -15,14 +18,14 @@ Timer object constructor which takes the following parameters:
 
 Parameter         | Type           | Required       | Default        | Description
 ----------------- | -------------- | -------------- | -------------- | ----------------
-\_params          | string         | No             | null           | TODO
-\_send\_self      | boolean        | No             | false          | TODO
+\_params          | ANY            | No             | null           | A value to pass to the callback when it is called
+\_send\_self      | boolean        | No             | false          | If set to true, a reference to the timer object will be passed to the callback
 
 #### Example
 
 ```squirrel
 // initialise the class
-TODO
+t <- Timer({ "id": 1 }, true);
 ```
 
 ## Class Methods
@@ -39,7 +42,7 @@ Update the object's parameters that were set in the constructor.
 
 Parameter         | Type           | Required       | Default        | Description
 ----------------- | -------------- | -------------- | -------------- | ----------------
-\_params          | string         | Yes            | N/A            | TODO
+\_params          | string         | Yes            | N/A            | A value to pass to the callback when it is called
 
 ### set(\_duration, \_callback)
 Start a new timer to execute the callback after the specified duration.
@@ -48,6 +51,16 @@ Parameter         | Type           | Required       | Default        | Descripti
 ----------------- | -------------- | -------------- | -------------- | ----------------
 \_duration        | float          | Yes            | N/A            | The duration of the timer in seconds
 \_callback        | function       | Yes            | N/A            | The function to run when the timer finishes
+
+#### Example
+
+```squirrel
+function myFunc(timer, params) {
+    server.log("id: " + params.id);
+}
+t <- Timer({ "id": 1 }, true).set(5, myFunc);
+// Will print to the logs: "id: 1"
+```
 
 ### repeat(\_interval, \_callback)
 Start a new timer to repeat the execution of the callback at the specified interval.
