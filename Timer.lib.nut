@@ -16,14 +16,14 @@ class Timer {
     //     dur (float)       the duration of the timer
     //     cb  (function)    the function to run when the timer fires
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
-    function set(dur, cb) {
+    function set(dur, cb, ...) {
+        local now = date();
         _addTimer({
             "id": _nextId,
-            "time": dur + time(),
-            "cb": function() {
-                cb();
-                _next();
-            }.bindenv(this)
+            "sec": math.floor(dur).tointeger() + now.time,
+            "subSec": dur - math.floor(dur).tointeger() + (now.usec / 1000000),
+            "cb": cb,
+            "args": vargv
         });
         return _nextId++;
     }
@@ -34,14 +34,13 @@ class Timer {
     //     t  (float)       the time that the timer should fire
     //     cb (function)    the function to run when the timer fires
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
-    function at(t, cb) {
+    function at(t, cb, ...) {
         _addTimer({
             "id": _nextId,
-            "time": (typeof t == "string") ? (_strtodate(t, tzoffset()).time) : t,
-            "cb": function() {
-                cb();
-                _next();
-            }.bindenv(this)
+            "sec": (typeof t == "string") ? (_strtodate(t, tzoffset()).time) : t,
+            "subSec": 0.0,
+            "cb": cb,
+            "args": vargv
         });
         return _nextId++;
     }
@@ -52,15 +51,15 @@ class Timer {
     //     int (float)     the time between executions of the timer
     //     cb  (function)    the function to run when the timer fires
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
-    function repeat(int, cb) {
+    function repeat(int, cb, ...) {
+        local now = date();
         _addTimer({
             "id": _nextId,
-            "time": int + time(),
+            "sec": math.floor(int).tointeger() + now.time,
+            "subSec": int - math.floor(int).tointeger() + (now.usec / 1000000),
             "repeat": int,
-            "cb": function() {
-                cb();
-                _next();
-            }.bindenv(this)
+            "cb": cb,
+            "args": vargv
         });
         return _nextId++;
     }
@@ -72,15 +71,13 @@ class Timer {
     //     int (float)     the time between executions of the timer
     //     cb  (function)    the function to run when the timer fires
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
-    function repeatFrom(t, int, cb) {
+    function repeatFrom(t, int, cb, ...) {
         _addTimer({
             "id": _nextId,
             "time": (typeof t == "string") ? (_strtodate(t, tzoffset()).time) : t,
             "repeat": int,
-            "cb": function() {
-                cb();
-                _next();
-            }.bindenv(this)
+            "cb": cb,
+            "args": vargv
         });
         return _nextId++;
     }
@@ -113,7 +110,7 @@ class Timer {
     function now(id) {
         foreach (i, t in _timers) {
             if (_timers[i].id == id) {
-                _timers[i].cb();
+                _timers[i].cb.acall(_timers[i].args);
                 return true;
             }
         }
@@ -170,7 +167,10 @@ class Timer {
     function _start() {
         if (_timers.len() > 0) {
             if (_currentTimer != null) imp.cancelwakeup(_currentTimer);
-            _currentTimer = imp.wakeup((_timers[0].time - time()), _timers[0].cb);
+            _currentTimer = imp.wakeup((_timers[0].time - time()), function() {
+                _timers[0].cb.acall(_timers[0].args);
+                _next();
+            }.bindenv(this));
         }
     }
 
