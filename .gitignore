@@ -1,3 +1,4 @@
 *.swp
 builds
 .impconfig
+OLD_*
