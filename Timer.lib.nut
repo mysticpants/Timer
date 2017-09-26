@@ -2,9 +2,10 @@ class Timer {
 
     static VERSION = "1.0.0";
 
-    _nextId = 1;
     _timers = [];
     _currentTimer = null;
+    _currentId = null;
+    _nextId = 1;
 
     constructor() {
 
@@ -93,18 +94,25 @@ class Timer {
     //     id (integer)       the id of the existing timer
     // Return: (boolean) whether the timer was removed or not
     function cancel(id) {
+        local removed = false;
+
+        if (_currentId == id) {
+            imp.cancelwakeup(_currentTimer);
+            _currentTimer = null;
+            _currentId = null;
+        }
+
         foreach (i, t in _timers) {
             if (_timers[i].id == id) {
+                _timers.remove(i);
                 // Check if the timer to cancel is at the front of the queue
-                if (i == 0) {
+                if (i == 0 && _timers.len() >= 1) {
                     _next();
-                } else {
-                    _timers.remove(i);
                 }
-                return true;
+                removed = true;
             }
         }
-        return false;
+        return removed;
     }
 
     // Trigger an existing timer's callback to run now (timer will also continue as normal)
@@ -155,17 +163,23 @@ class Timer {
     }
 
     function _next() {
-        imp.cancelwakeup(_currentTimer);
-        _currentTimer = null;
-        // If the current timer needs to repeat it should be added back into the array
-        if ("repeat" in _timers[0] && _timers[0].repeat != null) {
-            local tmpTimer = _timers[0];
-            _timers.remove(0);
-            tmpTimer.sec += math.floor(tmpTimer.repeat).tointeger();
-            tmpTimer.subSec += tmpTimer.repeat - math.floor(tmpTimer.repeat).tointeger();
-            _addTimer(tmpTimer);
-        } else {
-            _timers.remove(0);
+        if(_currentTimer != null) {
+            imp.cancelwakeup(_currentTimer);
+            _currentTimer = null;
+            _currentId = null;
+        }
+
+        if (_timers.len() >= 1) {
+            // If the current timer needs to repeat it should be added back into the array
+            if ("repeat" in _timers[0] && _timers[0].repeat != null) {
+                local tmpTimer = _timers[0];
+                _timers.remove(0);
+                tmpTimer.sec += math.floor(tmpTimer.repeat).tointeger();
+                tmpTimer.subSec += tmpTimer.repeat - math.floor(tmpTimer.repeat).tointeger();
+                _addTimer(tmpTimer);
+            } else {
+                _timers.remove(0);
+            }
         }
         _start();
     }
@@ -181,6 +195,7 @@ class Timer {
                 _timers[0].cb.acall(_timers[0].args);
                 _next();
             }.bindenv(this));
+            _currentId = _timers[0].id;
         }
     }
 
