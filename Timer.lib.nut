@@ -18,6 +18,7 @@ class Timer {
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
     function set(dur, cb, ...) {
         local now = date();
+        vargv.insert(0, this);
         _addTimer({
             "id": _nextId,
             "sec": math.floor(dur).tointeger() + now.time,
@@ -35,6 +36,7 @@ class Timer {
     //     cb (function)    the function to run when the timer fires
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
     function at(t, cb, ...) {
+        vargv.insert(0, this);
         _addTimer({
             "id": _nextId,
             "sec": (typeof t == "string") ? (_strtodate(t, tzoffset()).time) : t,
@@ -53,6 +55,7 @@ class Timer {
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
     function repeat(int, cb, ...) {
         local now = date();
+        vargv.insert(0, this);
         _addTimer({
             "id": _nextId,
             "sec": math.floor(int).tointeger() + now.time,
@@ -72,6 +75,7 @@ class Timer {
     //     cb  (function)    the function to run when the timer fires
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
     function repeatFrom(t, int, cb, ...) {
+        vargv.insert(0, this);
         _addTimer({
             "id": _nextId,
             "time": (typeof t == "string") ? (_strtodate(t, tzoffset()).time) : t,
