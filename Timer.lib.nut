@@ -22,7 +22,7 @@ class Timer {
         _addTimer({
             "id": _nextId,
             "sec": math.floor(dur).tointeger() + now.time,
-            "subSec": dur - math.floor(dur).tointeger() + (now.usec / 1000000),
+            "subSec": dur - math.floor(dur).tointeger() + (now.usec / 1000000.0),
             "cb": cb,
             "args": vargv
         });
@@ -59,7 +59,7 @@ class Timer {
         _addTimer({
             "id": _nextId,
             "sec": math.floor(int).tointeger() + now.time,
-            "subSec": int - math.floor(int).tointeger() + (now.usec / 1000000),
+            "subSec": int - math.floor(int).tointeger() + (now.usec / 1000000.0),
             "repeat": int,
             "cb": cb,
             "args": vargv
@@ -78,7 +78,8 @@ class Timer {
         vargv.insert(0, this);
         _addTimer({
             "id": _nextId,
-            "time": (typeof t == "string") ? (_strtodate(t, tzoffset()).time) : t,
+            "sec": (typeof t == "string") ? (_strtodate(t, tzoffset()).time) : t,
+            "subSec": 0.0,
             "repeat": int,
             "cb": cb,
             "args": vargv
@@ -142,7 +143,7 @@ class Timer {
         }
 
         for (local i = _timers.len() - 1; i >= 0; i--) {
-            if (_timers[i].time < newTimer.time) {
+            if ((_timers[i].sec < newTimer.sec) || (_timers[i].sec == newTimer.sec && _timers[i].subSec < newTimer.subSec)) {
                 _timers.insert(i + 1, newTimer);
                 break;
             } else if (i == 0) {
@@ -160,7 +161,8 @@ class Timer {
         if ("repeat" in _timers[0] && _timers[0].repeat != null) {
             local tmpTimer = _timers[0];
             _timers.remove(0);
-            tmpTimer.time += tmpTimer.repeat;
+            tmpTimer.sec += math.floor(tmpTimer.repeat).tointeger();
+            tmpTimer.subSec += tmpTimer.repeat - math.floor(tmpTimer.repeat).tointeger();
             _addTimer(tmpTimer);
         } else {
             _timers.remove(0);
@@ -171,7 +173,11 @@ class Timer {
     function _start() {
         if (_timers.len() > 0) {
             if (_currentTimer != null) imp.cancelwakeup(_currentTimer);
-            _currentTimer = imp.wakeup((_timers[0].time - time()), function() {
+
+            local now = date();
+            local dur = (_timers[0].sec - now.time) + (_timers[0].subSec - now.usec / 1000000.0);
+
+            _currentTimer = imp.wakeup(dur, function() {
                 _timers[0].cb.acall(_timers[0].args);
                 _next();
             }.bindenv(this));
