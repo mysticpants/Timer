@@ -1,15 +1,11 @@
-class Timer {
+class Scheduler {
 
     static VERSION = "1.0.0";
 
-    _timers = [];
-    _currentTimer = null;
-    _currentId = null;
-    _nextId = 1;
-
-    constructor() {
-
-    }
+    _jobs       = [];
+    _currentJob = null;
+    _currentId  = null;
+    _nextId     = 1;
 
     // Start a new timer to trigger after a specific duration
     //
@@ -20,14 +16,17 @@ class Timer {
     function set(dur, cb, ...) {
         local now = date();
         vargv.insert(0, this);
-        _addTimer({
-            "id": _nextId,
+
+        local newJob = Job(this, {
+            "id": _nextId++,
             "sec": math.floor(dur).tointeger() + now.time,
             "subSec": dur - math.floor(dur).tointeger() + (now.usec / 1000000.0),
             "cb": cb,
             "args": vargv
         });
-        return _nextId++;
+        _addJob(newJob);
+
+        return newJob;
     }
 
     // Start a new timer to trigger at a specific time
@@ -38,14 +37,17 @@ class Timer {
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
     function at(t, cb, ...) {
         vargv.insert(0, this);
-        _addTimer({
-            "id": _nextId,
+
+        local newJob = Job(this, {
+            "id": _nextId++,
             "sec": (typeof t == "string") ? (_strtodate(t, tzoffset()).time) : t,
             "subSec": 0.0,
             "cb": cb,
             "args": vargv
         });
-        return _nextId++;
+        _addJob(newJob);
+
+        return newJob;
     }
 
     // Start a new timer to trigger repeatedly at a specific interval
@@ -57,15 +59,18 @@ class Timer {
     function repeat(int, cb, ...) {
         local now = date();
         vargv.insert(0, this);
-        _addTimer({
-            "id": _nextId,
+
+        local newJob = Job(this, {
+            "id": _nextId++,
             "sec": math.floor(int).tointeger() + now.time,
             "subSec": int - math.floor(int).tointeger() + (now.usec / 1000000.0),
             "repeat": int,
             "cb": cb,
             "args": vargv
         });
-        return _nextId++;
+        _addJob(newJob);
+
+        return newJob;
     }
 
     // Start a new timer to trigger repeatedly at a specific interval, starting at a specific time
@@ -77,15 +82,87 @@ class Timer {
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
     function repeatFrom(t, int, cb, ...) {
         vargv.insert(0, this);
-        _addTimer({
-            "id": _nextId,
+
+        local newJob = Job(this, {
+            "id": _nextId++,
             "sec": (typeof t == "string") ? (_strtodate(t, tzoffset()).time) : t,
             "subSec": 0.0,
             "repeat": int,
             "cb": cb,
             "args": vargv
         });
-        return _nextId++;
+        _addJob(newJob);
+
+        return newJob;
+    }
+
+    function tzoffset(offset = null) {
+        // Store and retrieve the tzoffset from the global scope
+        if (!("timer_tzoffset" in ::getroottable())) ::timer_tzoffset <- 0;
+        if (offset != null) ::timer_tzoffset <- offset;
+        return ::timer_tzoffset;
+    }
+
+    // -------------------- PRIVATE METHODS -------------------- //
+
+    // Add a new timer into the correct position in the _jobs array
+    //
+    // Parameters:
+    //     newJob (table)       a table representing the new timer
+    function _addJob(newJob) {
+        if (_jobs.len() == 0) {
+            _jobs.insert(0, newJob);
+            _start();
+            return;
+        }
+
+        for (local i = _jobs.len() - 1; i >= 0; i--) {
+            if ((_jobs[i].sec < newJob.sec) || (_jobs[i].sec == newJob.sec && _jobs[i].subSec < newJob.subSec)) {
+                _jobs.insert(i + 1, newJob);
+                break;
+            } else if (i == 0) {
+                _jobs.insert(0, newJob);
+                _start();
+                break;
+            }
+        }
+    }
+
+    function _next() {
+        if(_currentJob != null) {
+            imp.cancelwakeup(_currentJob);
+            _currentJob = null;
+            _currentId = null;
+        }
+
+        if (_jobs.len() >= 1) {
+            // If the current timer needs to repeat it should be added back into the array
+            if ("repeat" in _jobs[0] && _jobs[0].repeat != null) {
+                local tmpJob = _jobs[0];
+                _jobs.remove(0);
+                tmpJob.sec += math.floor(tmpJob.repeat).tointeger();
+                tmpJob.subSec += tmpJob.repeat - math.floor(tmpJob.repeat).tointeger();
+                _addJob(tmpJob);
+            } else {
+                _jobs.remove(0);
+            }
+        }
+        _start();
+    }
+
+    function _start() {
+        if (_jobs.len() > 0) {
+            if (_currentJob != null) imp.cancelwakeup(_currentJob);
+
+            local now = date();
+            local dur = (_jobs[0].sec - now.time) + (_jobs[0].subSec - now.usec / 1000000.0);
+
+            _currentJob = imp.wakeup(dur, function() {
+                _jobs[0].cb.acall(_jobs[0].args);
+                _next();
+            }.bindenv(this));
+            _currentId = _jobs[0].id;
+        }
     }
 
     // Cancel an existing timer
@@ -93,20 +170,22 @@ class Timer {
     // Parameters:
     //     id (integer)       the id of the existing timer
     // Return: (boolean) whether the timer was removed or not
-    function cancel(id) {
+    function _cancel(id) {
         local removed = false;
 
+        // If the timer to cancel is currently running, cancel it
         if (_currentId == id) {
-            imp.cancelwakeup(_currentTimer);
-            _currentTimer = null;
+            imp.cancelwakeup(_currentJob);
+            _currentJob = null;
             _currentId = null;
         }
 
-        foreach (i, t in _timers) {
-            if (_timers[i].id == id) {
-                _timers.remove(i);
+        // Look for the timer in the queue and remove it
+        foreach (i, t in _jobs) {
+            if (_jobs[i].id == id) {
+                _jobs.remove(i);
                 // Check if the timer to cancel is at the front of the queue
-                if (i == 0 && _timers.len() >= 1) {
+                if (i == 0 && _jobs.len() >= 1) {
                     _next();
                 }
                 removed = true;
@@ -120,83 +199,14 @@ class Timer {
     // Parameters:
     //     id (integer)       the id of the existing timer
     // Return: (boolean) whether the callback was triggered or not
-    function now(id) {
-        foreach (i, t in _timers) {
-            if (_timers[i].id == id) {
-                _timers[i].cb.acall(_timers[i].args);
+    function _now(id) {
+        foreach (i, t in _jobs) {
+            if (_jobs[i].id == id) {
+                _jobs[i].cb.acall(_jobs[i].args);
                 return true;
             }
         }
         return false;
-    }
-
-    function tzoffset(offset = null) {
-        // Store and retrieve the tzoffset from the global scope
-        if (!("timer_tzoffset" in ::getroottable())) ::timer_tzoffset <- 0;
-        if (offset != null) ::timer_tzoffset <- offset;
-        return ::timer_tzoffset;
-    }
-
-    // -------------------- PRIVATE METHODS -------------------- //
-
-    // Add a new timer into the correct position in the _timers array
-    //
-    // Parameters:
-    //     newTimer (table)       a table representing the new timer
-    function _addTimer(newTimer) {
-        if (_timers.len() == 0) {
-            _timers.insert(0, newTimer);
-            _start();
-            return;
-        }
-
-        for (local i = _timers.len() - 1; i >= 0; i--) {
-            if ((_timers[i].sec < newTimer.sec) || (_timers[i].sec == newTimer.sec && _timers[i].subSec < newTimer.subSec)) {
-                _timers.insert(i + 1, newTimer);
-                break;
-            } else if (i == 0) {
-                _timers.insert(0, newTimer);
-                _start();
-                break;
-            }
-        }
-    }
-
-    function _next() {
-        if(_currentTimer != null) {
-            imp.cancelwakeup(_currentTimer);
-            _currentTimer = null;
-            _currentId = null;
-        }
-
-        if (_timers.len() >= 1) {
-            // If the current timer needs to repeat it should be added back into the array
-            if ("repeat" in _timers[0] && _timers[0].repeat != null) {
-                local tmpTimer = _timers[0];
-                _timers.remove(0);
-                tmpTimer.sec += math.floor(tmpTimer.repeat).tointeger();
-                tmpTimer.subSec += tmpTimer.repeat - math.floor(tmpTimer.repeat).tointeger();
-                _addTimer(tmpTimer);
-            } else {
-                _timers.remove(0);
-            }
-        }
-        _start();
-    }
-
-    function _start() {
-        if (_timers.len() > 0) {
-            if (_currentTimer != null) imp.cancelwakeup(_currentTimer);
-
-            local now = date();
-            local dur = (_timers[0].sec - now.time) + (_timers[0].subSec - now.usec / 1000000.0);
-
-            _currentTimer = imp.wakeup(dur, function() {
-                _timers[0].cb.acall(_timers[0].args);
-                _next();
-            }.bindenv(this));
-            _currentId = _timers[0].id;
-        }
     }
 
     function _strToDate(str, tz=0) {
@@ -273,6 +283,48 @@ class Timer {
         local dateobj = date(offset);
         dateobj.str <- format("%02d-%02d-%02d %02d:%02d:%02d Z", dateobj.year, dateobj.month+1, dateobj.day, dateobj.hour, dateobj.min, dateobj.sec);
         return dateobj;
+    }
+
+}
+
+class Job {
+
+    _scheduler = null;
+
+    id     = null;
+    sec    = null;
+    subSec = null;
+    repeat = null;
+    cb     = null;
+    args   = null;
+
+    constructor(scheduler, params) {
+
+        _scheduler = scheduler;
+
+        if ("id" in params)     id     = params.id;
+        if ("sec" in params)    sec    = params.sec;
+        if ("subSec" in params) subSec = params.subSec;
+        if ("repeat" in params) repeat = params.repeat;
+        if ("cb" in params)     cb     = params.cb;
+        if ("args" in params)   args   = params.args;
+
+    }
+
+    function cancel() {
+        _scheduler._cancel(id);
+    }
+
+    function now() {
+        _scheduler._now(id);
+    }
+
+    function pause() {
+        _scheduler._pause(id);
+    }
+
+    function unpause() {
+        _scheduler._unpause(id);
     }
 
 }
