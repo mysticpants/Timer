@@ -1,3 +1,10 @@
+const JOB_TYPE_SET         = "set";
+const JOB_TYPE_AT          = "at";
+const JOB_TYPE_REPEAT      = "repeat";
+const JOB_TYPE_REPEAT_FROM = "repeat from";
+
+const JOB_ERROR_RESET = "Cannot reset job type: %s";
+
 class Scheduler {
 
     static VERSION = "1.0.0";
@@ -18,7 +25,9 @@ class Scheduler {
         vargv.insert(0, this);
 
         local newJob = Job(this, {
+            "type": JOB_TYPE_SET,
             "id": _nextId++,
+            "dur": dur,
             "sec": math.floor(dur).tointeger() + now.time,
             "subSec": dur - math.floor(dur).tointeger() + (now.usec / 1000000.0),
             "cb": cb,
@@ -39,6 +48,7 @@ class Scheduler {
         vargv.insert(0, this);
 
         local newJob = Job(this, {
+            "type": JOB_TYPE_AT,
             "id": _nextId++,
             "sec": (typeof t == "string") ? (_strtodate(t, tzoffset()).time) : t,
             "subSec": 0.0,
@@ -61,6 +71,7 @@ class Scheduler {
         vargv.insert(0, this);
 
         local newJob = Job(this, {
+            "type": JOB_TYPE_REPEAT,
             "id": _nextId++,
             "sec": math.floor(int).tointeger() + now.time,
             "subSec": int - math.floor(int).tointeger() + (now.usec / 1000000.0),
@@ -84,6 +95,7 @@ class Scheduler {
         vargv.insert(0, this);
 
         local newJob = Job(this, {
+            "type": JOB_TYPE_REPEAT_FROM,
             "id": _nextId++,
             "sec": (typeof t == "string") ? (_strtodate(t, tzoffset()).time) : t,
             "subSec": 0.0,
@@ -142,6 +154,10 @@ class Scheduler {
                 _jobs.remove(0);
                 tmpJob.sec += math.floor(tmpJob.repeat).tointeger();
                 tmpJob.subSec += tmpJob.repeat - math.floor(tmpJob.repeat).tointeger();
+
+                // Change type from JOB_TYPE_REPEAT_FROM to JOB_TYPE_REPEAT (important for resetting)
+                if (tmpJob.type == JOB_TYPE_REPEAT_FROM) tmpJob.type = JOB_TYPE_REPEAT;
+
                 _addJob(tmpJob);
             } else {
                 _jobs.remove(0);
@@ -171,8 +187,6 @@ class Scheduler {
     //     id (integer)       the id of the existing timer
     // Return: (boolean) whether the timer was removed or not
     function _cancel(id) {
-        local removed = false;
-
         // If the timer to cancel is currently running, cancel it
         if (_currentId == id) {
             imp.cancelwakeup(_currentJob);
@@ -188,10 +202,8 @@ class Scheduler {
                 if (i == 0 && _jobs.len() >= 1) {
                     _next();
                 }
-                removed = true;
             }
         }
-        return removed;
     }
 
     // Trigger an existing timer's callback to run now (timer will also continue as normal)
@@ -203,10 +215,8 @@ class Scheduler {
         foreach (i, t in _jobs) {
             if (_jobs[i].id == id) {
                 _jobs[i].cb.acall(_jobs[i].args);
-                return true;
             }
         }
-        return false;
     }
 
     function _strToDate(str, tz=0) {
@@ -291,40 +301,105 @@ class Job {
 
     _scheduler = null;
 
+    type   = null;
     id     = null;
+    dur    = null;
     sec    = null;
     subSec = null;
     repeat = null;
     cb     = null;
     args   = null;
 
-    constructor(scheduler, params) {
+    postPauseDur = null;
 
+    constructor(scheduler, params) {
         _scheduler = scheduler;
 
+        if ("type" in params)   type   = params.type;
         if ("id" in params)     id     = params.id;
+        if ("dur" in params)    dur    = params.dur;
         if ("sec" in params)    sec    = params.sec;
         if ("subSec" in params) subSec = params.subSec;
         if ("repeat" in params) repeat = params.repeat;
         if ("cb" in params)     cb     = params.cb;
         if ("args" in params)   args   = params.args;
 
+        return this;
     }
 
+    // Cancel this job.
+    //
+    // Return: (Job) this
     function cancel() {
         _scheduler._cancel(id);
+
+        return this;
     }
 
+    // Trigger this job to fire immediately.
+    //
+    // Return: (Job) this
     function now() {
         _scheduler._now(id);
+
+        return this;
     }
 
+    // Pause the timer for this job.
+    //
+    // Return: (Job) this
     function pause() {
-        _scheduler._pause(id);
+        local now = date();
+
+        postPauseDur = (sec - now.time) + (subSec - now.usec / 1000000.0);
+
+        _scheduler._cancel(id);
+
+        return this;
     }
 
+    // Unpause the timer for this job.
+    //
+    // Return: (Job) this
     function unpause() {
-        _scheduler._unpause(id);
+        local now = date();
+
+        sec = math.floor(postPauseDur).tointeger() + now.time;
+        subSec = postPauseDur - math.floor(postPauseDur).tointeger() + (now.usec / 1000000.0);
+
+        postPauseDur = null;
+
+        _scheduler._addJob(this);
+
+        return this;
+    }
+
+    // Reset the timer for this job to start again. Doesn't work for "at" jobs or first execution of "repeat_from" jobs.
+    //
+    // Parameters:
+    //     rstDur (float) [null]       The optional new duration of the job's timer. Will default to the original duration
+    // Return: (Job) this
+    function reset(rstDur=null) {
+        if ([JOB_TYPE_AT, JOB_TYPE_REPEAT_FROM].find(type) != null) throw format(JOB_ERROR_RESET, type);
+
+        local now = date();
+
+        // Find the duration to reset the timer with
+        if (rstDur == null) {
+            if ("dur" in this) {
+                rstDur = dur;
+            } else if ("repeat" in this) {
+                rstDur = repeat;
+            }
+        }
+
+        sec = math.floor(rstDur).tointeger() + now.time;
+        subSec = rstDur - math.floor(rstDur).tointeger() + (now.usec / 1000000.0);
+
+        _scheduler._cancel(id);
+        _scheduler._addJob(this);
+
+        return this;
     }
 
 }
