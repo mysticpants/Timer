@@ -22,7 +22,7 @@ class Scheduler {
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
     function set(dur, cb, ...) {
         local now = date();
-        vargv.insert(0, this);
+        vargv.insert(0, null);
 
         local newJob = Job(this, {
             "type": JOB_TYPE_SET,
@@ -45,7 +45,7 @@ class Scheduler {
     //     cb (function)    the function to run when the timer fires
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
     function at(t, cb, ...) {
-        vargv.insert(0, this);
+        vargv.insert(0, null);
 
         local newJob = Job(this, {
             "type": JOB_TYPE_AT,
@@ -68,7 +68,7 @@ class Scheduler {
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
     function repeat(int, cb, ...) {
         local now = date();
-        vargv.insert(0, this);
+        vargv.insert(0, null);
 
         local newJob = Job(this, {
             "type": JOB_TYPE_REPEAT,
@@ -92,7 +92,7 @@ class Scheduler {
     //     cb  (function)    the function to run when the timer fires
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
     function repeatFrom(t, int, cb, ...) {
-        vargv.insert(0, this);
+        vargv.insert(0, null);
 
         local newJob = Job(this, {
             "type": JOB_TYPE_REPEAT_FROM,
