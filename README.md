@@ -90,6 +90,17 @@ Unpause the execution of the job's timer. Returns this.
 #### Job.cancel()
 Cancel this job. Returns this.
 
+#### Job.reset([rstDur])
+Reset this job (i.e. restart the timer). Optionally, a different duration to the
+original can be passed to this method. This can't be used for jobs created with
+the `Scheduler.at()` method or during the first timer of jobs created with the
+`Scheduler.repeatFrom()` method (can be used for `Scheduler.repeatFrom()` jobs after
+they've fired the first time). Returns this.
+
+Parameter         | Type           | Required       | Default           | Description
+----------------- | -------------- | -------------- | ----------------- | ----------------
+rstDur            | float          | No             | original duration | The optional new timer duration
+
 # License
 
 The Scheduler library is licensed under the [MIT License](LICENSE).
