@@ -1,4 +1,7 @@
 *.swp
 builds
+build
 .impconfig
+.imptest
 OLD_*
+**/.DS_Store
