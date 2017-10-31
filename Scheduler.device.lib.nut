@@ -21,15 +21,17 @@ class Scheduler {
     //     cb  (function)    the function to run when the timer fires
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
     function set(dur, cb, ...) {
-        local now = date();
+        local now = hardware.millis();
         vargv.insert(0, null);
+
+        if (dur < 0) dur = 0;
 
         local newJob = Job(this, {
             "type": JOB_TYPE_SET,
             "id": _nextId++,
             "dur": dur,
-            "sec": math.floor(dur).tointeger() + now.time,
-            "subSec": dur - math.floor(dur).tointeger() + (now.usec / 1000000.0),
+            "sec": math.floor(dur).tointeger() + math.floor(now / 1000.0).tointeger(),
+            "subSec": (dur - math.floor(dur).tointeger()) + ((now / 1000.0) - math.floor(now / 1000.0).tointeger()),
             "cb": cb,
             "args": vargv
         });
@@ -45,13 +47,18 @@ class Scheduler {
     //     cb (function)    the function to run when the timer fires
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
     function at(t, cb, ...) {
+        local now = date();
+        local nowMillis = hardware.millis();
         vargv.insert(0, null);
+
+        t = (typeof t == "string") ? (_strtodate(t, tzoffset()).time) : t;
+        if (t < now.time) t = now.time;
 
         local newJob = Job(this, {
             "type": JOB_TYPE_AT,
             "id": _nextId++,
-            "sec": (typeof t == "string") ? (_strtodate(t, tzoffset()).time) : t,
-            "subSec": 0.0,
+            "sec": math.floor(nowMillis / 1000.0).tointeger() + (t - now.time),
+            "subSec": (nowMillis / 1000.0) - math.floor(nowMillis / 1000.0).tointeger(),
             "cb": cb,
             "args": vargv
         });
@@ -67,21 +74,28 @@ class Scheduler {
     //     cb  (function)    the function to run when the timer fires
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
     function repeat(int, cb, ...) {
-        local now = date();
-        vargv.insert(0, null);
+        try {
+            local now = hardware.millis();
+            vargv.insert(0, null);
 
-        local newJob = Job(this, {
-            "type": JOB_TYPE_REPEAT,
-            "id": _nextId++,
-            "sec": math.floor(int).tointeger() + now.time,
-            "subSec": int - math.floor(int).tointeger() + (now.usec / 1000000.0),
-            "repeat": int,
-            "cb": cb,
-            "args": vargv
-        });
-        _addJob(newJob);
+            if (int < 0) int = 0;
 
-        return newJob;
+            local newJob = Job(this, {
+                "type": JOB_TYPE_REPEAT,
+                "id": _nextId++,
+                "sec": math.floor(int).tointeger() + math.floor(now / 1000.0).tointeger(),
+                "subSec": (int - math.floor(int).tointeger()) + ((now / 1000.0) - math.floor(now / 1000.0).tointeger()),
+                "repeat": int,
+                "cb": cb,
+                "args": vargv
+            });
+            _addJob(newJob);
+
+            return newJob;
+        } catch(e) {
+            server.error(e);
+            throw e;
+        }
     }
 
     // Start a new timer to trigger repeatedly at a specific interval, starting at a specific time
@@ -92,13 +106,18 @@ class Scheduler {
     //     cb  (function)    the function to run when the timer fires
     // Return: (integer) the id number of the timer (can be used to cancel the timer)
     function repeatFrom(t, int, cb, ...) {
+        local now = date();
+        local nowMillis = hardware.millis();
         vargv.insert(0, null);
+
+        t = (typeof t == "string") ? (_strtodate(t, tzoffset()).time) : t;
+        if (t < now.time) t = now.time;
 
         local newJob = Job(this, {
             "type": JOB_TYPE_REPEAT_FROM,
             "id": _nextId++,
-            "sec": (typeof t == "string") ? (_strtodate(t, tzoffset()).time) : t,
-            "subSec": 0.0,
+            "sec": math.floor(nowMillis / 1000.0).tointeger() + (t - now.time),
+            "subSec": (nowMillis / 1000.0) - math.floor(nowMillis / 1000.0).tointeger(),
             "repeat": int,
             "cb": cb,
             "args": vargv
@@ -163,6 +182,7 @@ class Scheduler {
                 _jobs.remove(0);
             }
         }
+
         _start();
     }
 
@@ -170,8 +190,11 @@ class Scheduler {
         if (_jobs.len() > 0) {
             if (_currentJob != null) imp.cancelwakeup(_currentJob);
 
-            local now = date();
-            local dur = (_jobs[0].sec - now.time) + (_jobs[0].subSec - now.usec / 1000000.0);
+            local now = hardware.millis() / 1000.0;
+            local nowSec = math.floor(now).tointeger();
+            local nowSubSec = (now) - math.floor(now).tointeger();
+
+            local dur = (_jobs[0].sec - nowSec) + (_jobs[0].subSec - nowSubSec);
 
             _currentJob = imp.wakeup(dur, function() {
                 _jobs[0].cb.acall(_jobs[0].args);
@@ -313,6 +336,7 @@ class Job {
     postPauseDur = null;
 
     constructor(scheduler, params) {
+        try {
         _scheduler = scheduler;
 
         if ("type" in params)   type   = params.type;
@@ -325,6 +349,11 @@ class Job {
         if ("args" in params)   args   = params.args;
 
         return this;
+        } catch (e) {
+            server.error("adfsln ");
+            server.error(e);
+            throw e;
+        }
     }
 
     // Cancel this job.
@@ -349,9 +378,11 @@ class Job {
     //
     // Return: (Job) this
     function pause() {
-        local now = date();
+        local now = hardware.millis() / 1000.0;
+        local nowSec = math.floor(now).tointeger();
+        local nowSubSec = (now) - math.floor(now).tointeger();
 
-        postPauseDur = (sec - now.time) + (subSec - now.usec / 1000000.0);
+        postPauseDur = (sec - nowSec) + (subSec - nowSubSec);
 
         _scheduler._cancel(id);
 
@@ -362,10 +393,12 @@ class Job {
     //
     // Return: (Job) this
     function unpause() {
-        local now = date();
+        local now = hardware.millis() / 1000.0;
+        local nowSec = math.floor(now).tointeger();
+        local nowSubSec = (now) - math.floor(now).tointeger();
 
-        sec = math.floor(postPauseDur).tointeger() + now.time;
-        subSec = postPauseDur - math.floor(postPauseDur).tointeger() + (now.usec / 1000000.0);
+        sec = math.floor(postPauseDur).tointeger() + nowSec;
+        subSec = postPauseDur - math.floor(postPauseDur).tointeger() + nowSubSec;
 
         postPauseDur = null;
 
@@ -382,7 +415,9 @@ class Job {
     function reset(rstDur=null) {
         if ([JOB_TYPE_AT, JOB_TYPE_REPEAT_FROM].find(type) != null) throw format(JOB_ERROR_RESET, type);
 
-        local now = date();
+        local now = hardware.millis() / 1000.0;
+        local nowSec = math.floor(now).tointeger();
+        local nowSubSec = (now) - math.floor(now).tointeger();
 
         // Find the duration to reset the timer with
         if (rstDur == null) {
@@ -393,8 +428,8 @@ class Job {
             }
         }
 
-        sec = math.floor(rstDur).tointeger() + now.time;
-        subSec = rstDur - math.floor(rstDur).tointeger() + (now.usec / 1000000.0);
+        sec = math.floor(rstDur).tointeger() + nowSec;
+        subSec = rstDur - math.floor(rstDur).tointeger() + nowSubSec;
 
         _scheduler._cancel(id);
         _scheduler._addJob(this);
