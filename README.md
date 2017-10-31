@@ -18,15 +18,6 @@ the top of your agent code:
 
 This class managers all the jobs and is used mostly for creating new jobs. Each method for creating a job will return the new Job class instance.
 
-#### Scheduler.set(\_duration, \_callback, [...])
-Start a new timer to execute the callback after the specified duration. Returns the new job.
-
-Parameter         | Type           | Required       | Default        | Description
------------------ | -------------- | -------------- | -------------- | ----------------
-\_duration        | float          | Yes            | N/A            | The duration of the timer in seconds
-\_callback        | function       | Yes            | N/A            | The function to run when the timer finishes
-...               | any            | No             | N/A            | Optional parameters that will be passed to the callback
-
 ##### Example
 
 ```squirrel
@@ -36,6 +27,15 @@ function myFunc(msg) {
 sch <- Scheduler();
 job1 <- sch.set(5, myFunc, "Timer fired");
 ```
+
+#### Scheduler.set(\_duration, \_callback, [...])
+Start a new timer to execute the callback after the specified duration. Returns the new job.
+
+Parameter         | Type           | Required       | Default        | Description
+----------------- | -------------- | -------------- | -------------- | ----------------
+\_duration        | float          | Yes            | N/A            | The duration of the timer in seconds
+\_callback        | function       | Yes            | N/A            | The function to run when the timer finishes
+...               | any            | No             | N/A            | Optional parameters that will be passed to the callback
 
 #### Scheduler.at(\_time, \_callback, [...])
 Create a new job with a callback to execute at a specified time. The time can either be provided as an integer
@@ -77,6 +77,17 @@ offset            | integer        | No             | null           | The time 
 ### Job
 
 An instance of this class is created for each new job (timer) created. Any action performed on an existing job will be done using a method on this class.
+
+##### Example
+
+```squirrel
+function myFunc(msg) {
+    server.log(msg);
+}
+sch <- Scheduler();
+job1 <- sch.set(5, myFunc, "Timer fired");
+job1.cancel();
+```
 
 #### Job.now()
 Immediately execute this job. Returns this.
