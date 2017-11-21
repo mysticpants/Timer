@@ -38,7 +38,7 @@ Parameter         | Type           | Required       | Default        | Descripti
 ...               | any            | No             | N/A            | Optional parameters that will be passed to the callback
 
 #### Scheduler.at(\_time, \_callback, [...])
-Create a new job with a callback to execute at a specified time. The time can either be provided as an integer
+Create a new job with a callback to execute at a specified time. The time can either be provided as an integer (do NOT provide a float)
 representing the number of seconds that have elapsed since midnight on 1 January 1970 OR as a string in the following
 format: "January 01, 2017 12:30 PM". Returns the new job.
 
@@ -58,7 +58,7 @@ Parameter         | Type           | Required       | Default        | Descripti
 ...               | any            | No             | N/A            | Optional parameters that will be passed to the callback
 
 #### Scheduler.repeat\_from(\_time, \_interval, \_callback, [...])
-Create a new job with a callback to execute at the specified time and then repeat at the specified interval after that. Returns the new job.
+Create a new job with a callback to execute at the specified time as an integer or string (do NOT provide a float) and then repeat at the specified interval after that. Returns the new job.
 
 Parameter         | Type           | Required       | Default        | Description
 ----------------- | -------------- | -------------- | -------------- | ----------------
