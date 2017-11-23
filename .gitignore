@@ -5,3 +5,7 @@ build
 .imptest
 OLD_*
 **/.DS_Store
+Makefile
+sample.nut
+Scheduler.device.lib.nut
+Scheduler.agent.lib.nut
